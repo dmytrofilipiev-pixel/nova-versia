@@ -839,7 +839,7 @@ export default function App() {
             {TABS.map(t=>(
               <button key={t.id} onClick={()=>setTab(t.id)} style={{ flex:1,padding:"11px 0 9px",background:"transparent",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",fontFamily:"inherit" }}>
                 <span style={{ fontSize:t.id==="coach"?15:18,lineHeight:1 }}>{t.icon}</span>
-                <span style={{ fontSize:9,letterSpacing:.3,color:tab===t.id?ACCENT:"#252525",fontWeight:tab===t.id?700:400,transition:"color .2s" }}>{t.label}</span>
+                <span style={{ fontSize:9,letterSpacing:.3,color:tab===t.id?ACCENT:"#777777",fontWeight:tab===t.id?700:400,transition:"color .2s" }}>{t.label}</span>
                 {tab===t.id && <div style={{ width:15,height:2,background:ACCENT,borderRadius:1 }} />}
               </button>
             ))}
