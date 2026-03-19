@@ -153,6 +153,7 @@ ${answers.map(a => `• ${a.slice(0, 130)}`).join("\n")}
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 async function callClaude(messages, system) {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json", "x-api-key": localStorage.getItem("nv_api_key") || "", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
     body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system, messages }),
@@ -683,14 +684,21 @@ function SettingsScreen({ state, onSave, onReset }) {
   const [morningT, setMorningT] = useState(reminders.morning?.time||"07:00");
   const [eveningT, setEveningT] = useState(reminders.evening?.time||"20:00");
   const [notifOn, setNotifOn]   = useState(Notification?.permission==="granted");
-  const [saved, setSaved]       = useState(false);
+  const [saved, setSaved]             = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [apiKey, setApiKey]           = useState(() => localStorage.getItem("nv_api_key") || "");
+  const [apiSaved, setApiSaved]       = useState(false);
 
   const save = () => {
     const upd = {...state,name,identity,avoid};
     saveData(upd); onSave(upd);
     if(notifOn){ scheduleReminder("morning",morningT,name); scheduleReminder("evening",eveningT,name); }
     setSaved(true); setTimeout(()=>setSaved(false),2000);
+  };
+
+  const saveApiKey = () => {
+    localStorage.setItem("nv_api_key", apiKey.trim());
+    setApiSaved(true); setTimeout(()=>setApiSaved(false),2000);
   };
 
   const enableNotif = async () => {
@@ -744,6 +752,29 @@ function SettingsScreen({ state, onSave, onReset }) {
         border:saved?`1.5px solid ${ACCENT}`:"none",
         borderRadius:13,fontSize:15,fontWeight:700,fontFamily:"inherit",cursor:"pointer",transition:"all .3s",
       }}>{saved?"✓ Збережено":"Зберегти налаштування"}</button>
+
+      {/* API Key */}
+      <Card style={{ marginBottom:18 }}>
+        <div style={{ fontSize:13,color:ACCENT,fontWeight:700,marginBottom:14 }}>🔑 Anthropic API ключ</div>
+        <div style={{ fontSize:12,color:"#444",marginBottom:12,lineHeight:1.6 }}>
+          Зберігається тільки на твоєму пристрої. Не потрапляє на сервер.
+        </div>
+        <Label>API KEY (sk-ant-...)</Label>
+        <input
+          value={apiKey}
+          onChange={e=>setApiKey(e.target.value)}
+          placeholder="sk-ant-api03-..."
+          type="password"
+          style={{...IS, marginBottom:12}}
+        />
+        <button onClick={saveApiKey} style={{
+          width:"100%",padding:"11px 0",
+          background:apiSaved?"transparent":"rgba(200,169,110,0.1)",
+          border:`1px solid ${ACCENT}`,
+          color:ACCENT,borderRadius:10,fontSize:13,
+          fontFamily:"inherit",cursor:"pointer",fontWeight:600,transition:"all .3s",
+        }}>{apiSaved?"✓ Ключ збережено":"Зберегти ключ"}</button>
+      </Card>
 
       {/* Reset */}
       <Card style={{ borderColor:"rgba(180,60,60,0.15)" }}>
@@ -838,7 +869,7 @@ export default function App() {
             {TABS.map(t=>(
               <button key={t.id} onClick={()=>setTab(t.id)} style={{ flex:1,padding:"11px 0 9px",background:"transparent",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",fontFamily:"inherit" }}>
                 <span style={{ fontSize:t.id==="coach"?15:18,lineHeight:1 }}>{t.icon}</span>
-                <span style={{ fontSize:9,letterSpacing:.3,color:tab===t.id?ACCENT:"#777777",fontWeight:tab===t.id?700:400,transition:"color .2s" }}>{t.label}</span>
+                <span style={{ fontSize:9,letterSpacing:.3,color:tab===t.id?ACCENT:"#777",fontWeight:tab===t.id?700:400,transition:"color .2s" }}>{t.label}</span>
                 {tab===t.id && <div style={{ width:15,height:2,background:ACCENT,borderRadius:1 }} />}
               </button>
             ))}
