@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: nova-versia-proxy
+    runtime: node
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: ANTHROPIC_API_KEY
+        sync: false   # заповниш вручну в Render Dashboard

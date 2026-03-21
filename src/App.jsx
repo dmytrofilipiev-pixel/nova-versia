@@ -107,6 +107,9 @@ function todayKey()     { return new Date().toISOString().slice(0, 10); }
 function isEvening()    { return new Date().getHours() >= 17; }
 function daysSince(sd)  { return Math.min(21, Math.max(1, Math.floor((Date.now() - new Date(sd).getTime()) / 86400000) + 1)); }
 
+// Проксі URL — міняй тільки тут, один раз
+const PROXY_URL = import.meta.env.VITE_PROXY_URL || "https://nova-versia-proxy.onrender.com";
+
 // ─── ADAPTIVE AI CONTEXT ─────────────────────────────────────────────────────
 function buildUserContext(state) {
   const days = state.days || {};
@@ -152,14 +155,28 @@ ${answers.map(a => `• ${a.slice(0, 130)}`).join("\n")}
 }
 
 // ─── API ─────────────────────────────────────────────────────────────────────
+// Ключ живе на сервері (Render). Клієнт не знає про нього нічого.
+const PROXY_URL = import.meta.env.VITE_PROXY_URL || "https://nova-versia-proxy.onrender.com";
+
 async function callClaude(messages, system) {
-  const r = await fetch("https://nova-versia-proxy.onrender.com/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": localStorage.getItem("nv_api_key") || "", "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-    body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system, messages }),
-  });
-  const d = await r.json();
-  return d.content?.[0]?.text || "Помилка з'єднання.";
+  try {
+    const r = await fetch(`${PROXY_URL}/api/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "claude-haiku-4-5", max_tokens: 1000, system, messages }),
+    });
+
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      if (r.status === 429) return "⏳ Забагато запитів — спробуй через хвилину.";
+      return `Помилка сервера: ${err?.error || r.status}`;
+    }
+
+    const d = await r.json();
+    return d.content?.[0]?.text || "Порожня відповідь.";
+  } catch {
+    return "Немає зʼєднання з сервером. Спробуй пізніше.";
+  }
 }
 
 async function askCoach(messages, dayNum, ctx) {
@@ -215,7 +232,7 @@ function checkReminders(name) {
 }
 
 // ─── UI PRIMITIVES ────────────────────────────────────────────────────────────
-const IS = { // inputStyle
+const IS = {
   width: "100%", padding: "12px 14px", borderRadius: 12,
   background: CARD2, border: `1px solid ${BORDER}`,
   color: "#EEE", fontSize: 15, fontFamily: "inherit", outline: "none",
@@ -231,13 +248,13 @@ function Card({ children, style }) {
 
 function RatingPicker({ value, onChange }) {
   return (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+    <div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
       {[1,2,3,4,5,6,7,8,9,10].map(n => (
         <button key={n} onClick={() => onChange(n)} style={{
-          width: 37, height: 37, borderRadius: 9,
-          background: value === n ? ACCENT : CARD2,
-          border: `1px solid ${value === n ? ACCENT : BORDER}`,
-          color: value === n ? DARK : "#555",
+          width: 36, height: 36, borderRadius: 9,
+          background: value === n ? ACCENT : value > 0 && n <= value ? "rgba(200,169,110,0.15)" : CARD2,
+          border: `1px solid ${value === n ? ACCENT : value > 0 && n <= value ? "rgba(200,169,110,0.3)" : BORDER}`,
+          color: value === n ? DARK : value > 0 && n <= value ? ACCENT : "#444",
           fontFamily: "inherit", fontSize: 13, fontWeight: value === n ? 800 : 400,
           cursor: "pointer", transition: "all 0.14s",
         }}>{n}</button>
@@ -269,6 +286,8 @@ function HabitRow({ habit, checked, onChange }) {
     </div>
   );
 }
+
+
 
 // ─── SETUP ────────────────────────────────────────────────────────────────────
 function SetupScreen({ onSetup }) {
@@ -306,16 +325,19 @@ function SetupScreen({ onSetup }) {
 function TodayScreen({ state, dayNum, onSave }) {
   const key = todayKey();
   const td  = state.days?.[key] || {};
-  const [mode, setMode]     = useState(isEvening() ? "evening" : "morning");
-  const [rating, setRating] = useState(0);
-  const [answer, setAnswer] = useState("");
-  const [word, setWord]     = useState("");
-  const [saved, setSaved]   = useState(false);
+  const [mode, setMode]       = useState(isEvening() ? "evening" : "morning");
+  const [rating, setRating]   = useState(0);
+  const [answer, setAnswer]   = useState("");
+  const [word, setWord]       = useState("");
+  const [saved, setSaved]     = useState(false);
+  const [aiInsight, setAiInsight] = useState("");
+  const [loadInsight, setLoadInsight] = useState(false);
 
   useEffect(() => {
     setRating(mode === "morning" ? (td.morningRating||0) : (td.eveningRating||0));
     setAnswer(mode === "morning" ? (td.morningAnswer||"") : (td.eveningAnswer||""));
     setWord  (mode === "morning" ? (td.morningWord||"")  : (td.eveningWord||""));
+    setAiInsight("");
     setSaved(false);
   }, [mode]);
 
@@ -329,6 +351,17 @@ function TodayScreen({ state, dayNum, onSave }) {
       : { eveningRating: rating, eveningAnswer: answer, eveningWord: word, eveningDone: true };
     const upd = { ...state, days: { ...state.days, [key]: { ...td, ...patch } } };
     saveData(upd); onSave(upd); setSaved(true); setTimeout(() => setSaved(false), 2500);
+  };
+
+  const getInsight = async () => {
+    if (!answer.trim()) return;
+    setLoadInsight(true); setAiInsight("");
+    const q = mode === "morning" ? MORNING_Q[idx] : EVENING_Q[idx];
+    const ctx = buildUserContext(state);
+    const prompt = `Питання: "${q}"\nВідповідь: "${answer}"\n\nДай конкретний коментар або наступний крок — 2 речення максимум.`;
+    const r = await askCoach([{ role: "user", content: prompt }], dayNum, ctx);
+    setAiInsight(r);
+    setLoadInsight(false);
   };
 
   return (
@@ -386,6 +419,31 @@ function TodayScreen({ state, dayNum, onSave }) {
         <textarea value={answer} onChange={e => setAnswer(e.target.value)}
           placeholder="Пиши чесно, 2–3 речення..." rows={3}
           style={{ ...IS, resize: "vertical", lineHeight: 1.6, minHeight: 88 }} />
+
+        {/* AI Insight button */}
+        {answer.trim().length > 10 && (
+          <button onClick={getInsight} disabled={loadInsight} style={{
+            marginTop: 9, width: "100%", padding: "10px 0",
+            background: "transparent", border: `1px solid ${BORDER}`,
+            color: loadInsight ? "#333" : "#555", borderRadius: 10,
+            fontFamily: "inherit", fontSize: 12.5, cursor: loadInsight ? "default" : "pointer",
+            transition: "all .2s",
+          }}>
+            {loadInsight ? "⏳ Коуч думає..." : "⚔  Отримати коментар від коуча"}
+          </button>
+        )}
+
+        {/* AI Insight result */}
+        {aiInsight && (
+          <div style={{
+            marginTop: 10, padding: "12px 15px", borderRadius: 12,
+            background: "rgba(91,143,168,0.08)", border: `1px solid rgba(91,143,168,0.2)`,
+            fontSize: 13.5, color: "#C0D4E0", lineHeight: 1.7,
+          }}>
+            <span style={{ fontSize: 11, color: ACCENT2, display: "block", marginBottom: 5, letterSpacing: 1 }}>КОУЧ</span>
+            {aiInsight}
+          </div>
+        )}
       </div>
 
       <div style={{ marginBottom: 17 }}>
@@ -479,18 +537,23 @@ function TrackerScreen({ state, dayNum, onSave }) {
 // ─── COACH ───────────────────────────────────────────────────────────────────
 function CoachScreen({ state, dayNum }) {
   const ctx = buildUserContext(state);
-  const [msgs, setMsgs]       = useState([{ role:"assistant", content:`День ${dayNum}, ${state.name}. Що маєш?` }]);
+  const [msgs, setMsgs]       = useState([{ role: "assistant", content: `День ${dayNum}, ${state.name}. Що маєш?` }]);
   const [input, setInput]     = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
+
   useEffect(()=>{ bottomRef.current?.scrollIntoView({behavior:"smooth"}); },[msgs,loading]);
 
   const send = async (text) => {
     const m = text||input; if(!m.trim()||loading) return;
     const newMsgs = [...msgs,{role:"user",content:m}];
     setMsgs(newMsgs); setInput(""); setLoading(true);
-    try { const r = await askCoach(newMsgs,dayNum,ctx); setMsgs(p=>[...p,{role:"assistant",content:r}]); }
-    catch { setMsgs(p=>[...p,{role:"assistant",content:"Помилка з'єднання."}]); }
+    try {
+      const r = await askCoach(newMsgs, dayNum, ctx);
+      setMsgs(p=>[...p,{role:"assistant",content:r}]);
+    } catch {
+      setMsgs(p=>[...p,{role:"assistant",content:"Помилка з'єднання. Спробуй ще раз."}]);
+    }
     setLoading(false);
   };
 
@@ -498,11 +561,18 @@ function CoachScreen({ state, dayNum }) {
 
   return (
     <div style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 70px)" }}>
-      <div style={{ padding:"16px 20px 12px", borderBottom:`1px solid ${BORDER}` }}>
-        <Label>AI-КОУЧ · АДАПТИВНИЙ</Label>
-        <div style={{ fontSize:11, color:"#2A2A2A" }}>День {dayNum} · {Object.keys(state.days||{}).length} днів даних</div>
+      {/* Header */}
+      <div style={{ padding:"14px 20px 10px", borderBottom:`1px solid ${BORDER}` }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+          <div>
+            <Label style={{ marginBottom: 2 }}>AI-КОУЧ · АДАПТИВНИЙ</Label>
+            <div style={{ fontSize:11, color:"#2A2A2A" }}>День {dayNum} · {Object.keys(state.days||{}).length} днів даних</div>
+          </div>
+
+        </div>
       </div>
 
+      {/* Messages */}
       <div style={{ flex:1, overflowY:"auto", padding:"14px 20px 8px" }}>
         {msgs.map((m,i)=>(
           <div key={i} style={{ display:"flex", justifyContent:m.role==="user"?"flex-end":"flex-start", marginBottom:13 }}>
@@ -516,9 +586,11 @@ function CoachScreen({ state, dayNum }) {
               background:m.role==="user"?ACCENT2:CARD2,
               border:`1px solid ${m.role==="user"?"transparent":BORDER}`,
               fontSize:14, color:"#E8E8E8", lineHeight:1.65,
+              whiteSpace:"pre-wrap",
             }}>{m.content}</div>
           </div>
         ))}
+
         {loading && (
           <div style={{ display:"flex", marginBottom:13 }}>
             <div style={{ width:30,height:30,borderRadius:"50%",background:ACCENT,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,marginRight:9 }}>⚔</div>
@@ -532,12 +604,15 @@ function CoachScreen({ state, dayNum }) {
         <div ref={bottomRef} />
       </div>
 
+      {/* Quick prompts */}
       <div style={{ padding:"5px 20px", display:"flex", gap:7, overflowX:"auto" }}>
-        {quick.map(q=>(
-          <button key={q} onClick={()=>send(q)} style={{ padding:"6px 11px",borderRadius:18,flexShrink:0,background:"transparent",border:`1px solid ${BORDER}`,color:"#383838",fontSize:12,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap" }}>{q}</button>
-        ))}
-      </div>
+          {quick.map(q=>(
+            <button key={q} onClick={()=>send(q)} style={{ padding:"6px 11px",borderRadius:18,flexShrink:0,background:"transparent",border:`1px solid ${BORDER}`,color:"#383838",fontSize:12,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap" }}>{q}</button>
+          ))}
+        </div>
+      )}
 
+      {/* Input */}
       <div style={{ padding:"9px 20px 20px", borderTop:`1px solid ${BORDER}`, display:"flex", gap:9, alignItems:"flex-end" }}>
         <textarea value={input} onChange={e=>setInput(e.target.value)}
           onKeyDown={e=>e.key==="Enter"&&!e.shiftKey&&(e.preventDefault(),send())}
@@ -652,7 +727,6 @@ function StatsScreen({ state, dayNum }) {
         );
       })}
 
-      {/* Weekly AI Summary */}
       <div style={{ marginTop:26 }}>
         <Label>ТИЖНЕВИЙ ПІДСУМОК З AI</Label>
         <button onClick={handleSum} disabled={loadSum} style={{
@@ -666,7 +740,7 @@ function StatsScreen({ state, dayNum }) {
           {loadSum ? "⏳ Аналізую тиждень..." : `⚔  Аналіз тижня ${weekNum}`}
         </button>
         {summary && (
-          <div style={{ marginTop:14, padding:"15px 17px", borderRadius:14, background:CARD2, border:`1px solid ${BORDER}`, fontSize:13.5, color:"#BBB", lineHeight:1.75 }}>
+          <div style={{ marginTop:14, padding:"15px 17px", borderRadius:14, background:CARD2, border:`1px solid ${BORDER}`, fontSize:13.5, color:"#BBB", lineHeight:1.75, whiteSpace:"pre-wrap" }}>
             {summary}
           </div>
         )}
@@ -686,8 +760,6 @@ function SettingsScreen({ state, onSave, onReset }) {
   const [notifOn, setNotifOn]   = useState(Notification?.permission==="granted");
   const [saved, setSaved]             = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
-  const [apiKey, setApiKey]           = useState(() => localStorage.getItem("nv_api_key") || "");
-  const [apiSaved, setApiSaved]       = useState(false);
 
   const save = () => {
     const upd = {...state,name,identity,avoid};
@@ -696,10 +768,6 @@ function SettingsScreen({ state, onSave, onReset }) {
     setSaved(true); setTimeout(()=>setSaved(false),2000);
   };
 
-  const saveApiKey = () => {
-    localStorage.setItem("nv_api_key", apiKey.trim());
-    setApiSaved(true); setTimeout(()=>setApiSaved(false),2000);
-  };
 
   const enableNotif = async () => {
     if(!("Notification" in window)) return;
@@ -753,28 +821,7 @@ function SettingsScreen({ state, onSave, onReset }) {
         borderRadius:13,fontSize:15,fontWeight:700,fontFamily:"inherit",cursor:"pointer",transition:"all .3s",
       }}>{saved?"✓ Збережено":"Зберегти налаштування"}</button>
 
-      {/* API Key */}
-      <Card style={{ marginBottom:18 }}>
-        <div style={{ fontSize:13,color:ACCENT,fontWeight:700,marginBottom:14 }}>🔑 Anthropic API ключ</div>
-        <div style={{ fontSize:12,color:"#444",marginBottom:12,lineHeight:1.6 }}>
-          Зберігається тільки на твоєму пристрої. Не потрапляє на сервер.
-        </div>
-        <Label>API KEY (sk-ant-...)</Label>
-        <input
-          value={apiKey}
-          onChange={e=>setApiKey(e.target.value)}
-          placeholder="sk-ant-api03-..."
-          type="password"
-          style={{...IS, marginBottom:12}}
-        />
-        <button onClick={saveApiKey} style={{
-          width:"100%",padding:"11px 0",
-          background:apiSaved?"transparent":"rgba(200,169,110,0.1)",
-          border:`1px solid ${ACCENT}`,
-          color:ACCENT,borderRadius:10,fontSize:13,
-          fontFamily:"inherit",cursor:"pointer",fontWeight:600,transition:"all .3s",
-        }}>{apiSaved?"✓ Ключ збережено":"Зберегти ключ"}</button>
-      </Card>
+
 
       {/* Reset */}
       <Card style={{ borderColor:"rgba(180,60,60,0.15)" }}>
@@ -879,4 +926,3 @@ export default function App() {
     </div>
   );
 }
-
