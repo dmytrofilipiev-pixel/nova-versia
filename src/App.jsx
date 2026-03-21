@@ -300,7 +300,7 @@ function SetupScreen({ onSetup }) {
       <div style={{ textAlign: "center", marginBottom: 44 }}>
         <div style={{ fontSize: 11, letterSpacing: 3, color: ACCENT, marginBottom: 14 }}>НОВА ВЕРСІЯ СЕБЕ</div>
         <div style={{ fontSize: 30, fontWeight: 800, color: "#FFF", lineHeight: 1.2 }}>21 день<br/>трансформації</div>
-        <div style={{ fontSize: 14, color: "#3A3A3A", marginTop: 12 }}>Визнач ідентичність — і починаємо</div>
+        <div style={{ fontSize: 14, color: "#666", marginTop: 12 }}>Визнач ідентичність — і починаємо</div>
       </div>
       {[["ЯК ТЕБЕ ЗВАТИ", name, setName, "Дмитро"],
         ["МОЯ НОВА ВЕРСІЯ", identity, setIdentity, "Діяю чітко, будую системно, без сумнівів"],
@@ -372,9 +372,9 @@ function TodayScreen({ state, dayNum, onSave }) {
           <div>
             <span style={{ fontSize: 11, color: ACCENT, letterSpacing: 2 }}>ДЕНЬ </span>
             <span style={{ fontSize: 46, fontWeight: 800, color: "#FFF", lineHeight: 1 }}>{dayNum}</span>
-            <span style={{ fontSize: 13, color: "#2A2A2A", marginLeft: 4 }}>/ 21</span>
+            <span style={{ fontSize: 13, color: "#666", marginLeft: 4 }}>/ 21</span>
           </div>
-          <div style={{ fontSize: 11, color: "#2E2E2E", textAlign: "right", lineHeight: 1.7 }}>{WEEK_LABELS[weekIdx]}</div>
+          <div style={{ fontSize: 11, color: "#666", textAlign: "right", lineHeight: 1.7 }}>{WEEK_LABELS[weekIdx]}</div>
         </div>
         <div style={{ height: 3, background: "#161616", borderRadius: 2 }}>
           <div style={{ height: "100%", borderRadius: 2, background: `linear-gradient(90deg,${ACCENT2},${ACCENT})`, width: `${(dayNum/21)*100}%`, transition: "width .6s ease" }} />
@@ -392,7 +392,7 @@ function TodayScreen({ state, dayNum, onSave }) {
           <button key={m} onClick={() => setMode(m)} style={{
             flex: 1, padding: "10px 0",
             background: mode===m ? (m==="morning" ? ACCENT2 : ACCENT) : "transparent",
-            color: mode===m ? "#FFF" : "#3A3A3A",
+            color: mode===m ? "#FFF" : "#777",
             border: "none", borderRadius: 9,
             fontFamily: "inherit", fontSize: 14, fontWeight: mode===m ? 700 : 400,
             cursor: "pointer", transition: "all 0.2s",
@@ -406,7 +406,7 @@ function TodayScreen({ state, dayNum, onSave }) {
 
       {/* Identity */}
       <div style={{ padding: "10px 13px", borderRadius: 10, background: CARD3, border: `1px solid ${BORDER}`, marginBottom: 16 }}>
-        <div style={{ fontSize: 9.5, color: "#2A2A2A", letterSpacing: 1, marginBottom: 4 }}>МОЯ НОВА ВЕРСІЯ</div>
+        <div style={{ fontSize: 9.5, color: "#666", letterSpacing: 1, marginBottom: 4 }}>МОЯ НОВА ВЕРСІЯ</div>
         <div style={{ fontSize: 13.5, color: "#999", lineHeight: 1.5 }}>{state.identity}</div>
       </div>
 
@@ -447,12 +447,12 @@ function TodayScreen({ state, dayNum, onSave }) {
       </div>
 
       <div style={{ marginBottom: 17 }}>
-        <Label color="#2E2E2E">{mode==="morning" ? "МІЙ СТАН ЗАРАЗ" : "ОЦІНКА ДНЯ"} (1–10)</Label>
+        <Label color="#666">{mode==="morning" ? "МІЙ СТАН ЗАРАЗ" : "ОЦІНКА ДНЯ"} (1–10)</Label>
         <RatingPicker value={rating} onChange={setRating} />
       </div>
 
       <div style={{ marginBottom: 22 }}>
-        <Label color="#2E2E2E">{mode==="morning" ? "СЛОВО-ЯКІР НА ДЕНЬ" : "СЛОВО-ВЕКТОР НА ЗАВТРА"}</Label>
+        <Label color="#666">{mode==="morning" ? "СЛОВО-ЯКІР НА ДЕНЬ" : "СЛОВО-ВЕКТОР НА ЗАВТРА"}</Label>
         <input value={word} onChange={e => setWord(e.target.value)} placeholder="одне слово..." style={IS} />
       </div>
 
@@ -486,7 +486,7 @@ function TrackerScreen({ state, dayNum, onSave }) {
       <div style={{ display:"flex", alignItems:"center", gap:18, padding:"17px 19px", borderRadius:16, background:"rgba(200,169,110,0.04)", border:`1px solid rgba(200,169,110,0.1)`, marginBottom:22 }}>
         <div style={{ textAlign:"center", minWidth:52 }}>
           <div style={{ fontSize:42, fontWeight:800, color:ACCENT, lineHeight:1 }}>{done}</div>
-          <div style={{ fontSize:11, color:"#2A2A2A" }}>/ {HABITS.length}</div>
+          <div style={{ fontSize:11, color:"#666" }}>/ {HABITS.length}</div>
         </div>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:14, color:"#AAA", marginBottom:9 }}>
@@ -501,7 +501,7 @@ function TrackerScreen({ state, dayNum, onSave }) {
       {HABITS.map(h => <HabitRow key={h.id} habit={h} checked={!!habits[h.id]} onChange={v => toggle(h.id,v)} />)}
 
       <div style={{ marginTop:26 }}>
-        <Label color="#2A2A2A">СТРІК 21 ДЕНЬ</Label>
+        <Label color="#666">СТРІК 21 ДЕНЬ</Label>
         <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
           {Array.from({length:21},(_,i)=>{
             const d   = i+1;
@@ -525,7 +525,7 @@ function TrackerScreen({ state, dayNum, onSave }) {
           {["Тиждень 1","Тиждень 2","Тиждень 3"].map((l,i)=>(
             <div key={l} style={{ display:"flex", alignItems:"center", gap:5 }}>
               <div style={{ width:9, height:9, borderRadius:2, background:WEEK_COLS[i] }} />
-              <span style={{ fontSize:11, color:"#2A2A2A" }}>{l}</span>
+              <span style={{ fontSize:11, color:"#666" }}>{l}</span>
             </div>
           ))}
         </div>
@@ -566,7 +566,7 @@ function CoachScreen({ state, dayNum }) {
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <div>
             <Label style={{ marginBottom: 2 }}>AI-КОУЧ · АДАПТИВНИЙ</Label>
-            <div style={{ fontSize:11, color:"#2A2A2A" }}>День {dayNum} · {Object.keys(state.days||{}).length} днів даних</div>
+            <div style={{ fontSize:11, color:"#666" }}>День {dayNum} · {Object.keys(state.days||{}).length} днів даних</div>
           </div>
 
         </div>
@@ -667,21 +667,21 @@ function StatsScreen({ state, dayNum }) {
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:22 }}>
         {[["Днів заповнено",filled,"/ 21"],["Звичок виконано",totalH,`/ ${dayNum*5}`],["Ранковий стан",avgM,"/ 10"],["Вечірній стан",avgE,"/ 10"]].map(([l,v,s])=>(
           <Card key={l}>
-            <div style={{ fontSize:10, color:"#2A2A2A", marginBottom:6 }}>{l}</div>
+            <div style={{ fontSize:10, color:"#666", marginBottom:6 }}>{l}</div>
             <div style={{ display:"flex",alignItems:"baseline",gap:4 }}>
               <span style={{ fontSize:29,fontWeight:800,color:ACCENT }}>{v}</span>
-              <span style={{ fontSize:11,color:"#2A2A2A" }}>{s}</span>
+              <span style={{ fontSize:11,color:"#666" }}>{s}</span>
             </div>
           </Card>
         ))}
       </div>
 
-      <Label color="#2A2A2A">ДИНАМІКА СТАНУ</Label>
+      <Label color="#666">ДИНАМІКА СТАНУ</Label>
       <Card style={{ padding:"14px 6px 6px", marginBottom:18 }}>
         <ResponsiveContainer width="100%" height={135}>
           <LineChart data={chartData}>
-            <XAxis dataKey="day" tick={{fill:"#2E2E2E",fontSize:10}} axisLine={false} tickLine={false} />
-            <YAxis domain={[0,10]} tick={{fill:"#2E2E2E",fontSize:10}} axisLine={false} tickLine={false} width={20} />
+            <XAxis dataKey="day" tick={{fill:"#666",fontSize:10}} axisLine={false} tickLine={false} />
+            <YAxis domain={[0,10]} tick={{fill:"#666",fontSize:10}} axisLine={false} tickLine={false} width={20} />
             <Tooltip {...tt} />
             <Line type="monotone" dataKey="ранок" stroke={ACCENT2} strokeWidth={2} dot={false} connectNulls />
             <Line type="monotone" dataKey="вечір" stroke={ACCENT} strokeWidth={2} dot={false} connectNulls />
@@ -690,18 +690,18 @@ function StatsScreen({ state, dayNum }) {
         <div style={{ display:"flex",gap:14,justifyContent:"center",paddingTop:5 }}>
           {[["Ранок",ACCENT2],["Вечір",ACCENT]].map(([l,c])=>(
             <div key={l} style={{ display:"flex",alignItems:"center",gap:5 }}>
-              <div style={{ width:18,height:2,background:c }} /><span style={{ fontSize:11,color:"#2A2A2A" }}>{l}</span>
+              <div style={{ width:18,height:2,background:c }} /><span style={{ fontSize:11,color:"#666" }}>{l}</span>
             </div>
           ))}
         </div>
       </Card>
 
-      <Label color="#2A2A2A">ЗВИЧКИ ПО ДНЯХ</Label>
+      <Label color="#666">ЗВИЧКИ ПО ДНЯХ</Label>
       <Card style={{ padding:"14px 6px 6px", marginBottom:22 }}>
         <ResponsiveContainer width="100%" height={105}>
           <BarChart data={chartData} barSize={7}>
-            <XAxis dataKey="day" tick={{fill:"#2E2E2E",fontSize:10}} axisLine={false} tickLine={false} />
-            <YAxis domain={[0,5]} tick={{fill:"#2E2E2E",fontSize:10}} axisLine={false} tickLine={false} width={16} />
+            <XAxis dataKey="day" tick={{fill:"#666",fontSize:10}} axisLine={false} tickLine={false} />
+            <YAxis domain={[0,5]} tick={{fill:"#666",fontSize:10}} axisLine={false} tickLine={false} width={16} />
             <Tooltip {...tt} />
             <Bar dataKey="звички" radius={[4,4,0,0]}>
               {chartData.map((_,i)=><Cell key={i} fill={i===dayNum-1?ACCENT:ACCENT2} fillOpacity={.75} />)}
@@ -710,7 +710,7 @@ function StatsScreen({ state, dayNum }) {
         </ResponsiveContainer>
       </Card>
 
-      <Label color="#2A2A2A">ВИКОНАННЯ ЗВИЧОК</Label>
+      <Label color="#666">ВИКОНАННЯ ЗВИЧОК</Label>
       {HABITS.map(h=>{
         const t   = Object.values(days).filter(d=>d.habits?.[h.id]).length;
         const pct = dayNum>0?Math.round((t/dayNum)*100):0;
@@ -804,7 +804,7 @@ function SettingsScreen({ state, onSave, onReset }) {
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
               {[["РАНОК ☀",morningT,setMorningT],["ВЕЧІР 🌙",eveningT,setEveningT]].map(([l,v,s])=>(
                 <div key={l}>
-                  <Label color="#2A2A2A">{l}</Label>
+                  <Label color="#666">{l}</Label>
                   <input type="time" value={v} onChange={e=>s(e.target.value)} style={{...IS,colorScheme:"dark"}} />
                 </div>
               ))}
@@ -849,11 +849,11 @@ function SettingsScreen({ state, onSave, onReset }) {
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
 const TABS = [
-  {id:"today",   icon:"🏠",label:"Сьогодні"},
-  {id:"tracker", icon:"✅",label:"Трекер"  },
-  {id:"coach",   icon:"⚔", label:"Коуч"   },
-  {id:"stats",   icon:"📈",label:"Прогрес" },
-  {id:"settings",icon:"⚙", label:"Опції"  },
+  {id:"today",   label:"Сьогодні"},
+  {id:"tracker", label:"Трекер"  },
+  {id:"coach",   label:"Коуч"   },
+  {id:"stats",   label:"Прогрес" },
+  {id:"settings",label:"Опції"  },
 ];
 
 export default function App() {
@@ -914,9 +914,8 @@ export default function App() {
 
           <div style={{ position:"fixed",bottom:0,left:0,right:0,background:"rgba(8,8,8,0.97)",borderTop:`1px solid ${BORDER}`,display:"flex",backdropFilter:"blur(24px)",paddingBottom:"env(safe-area-inset-bottom,0)" }}>
             {TABS.map(t=>(
-              <button key={t.id} onClick={()=>setTab(t.id)} style={{ flex:1,padding:"11px 0 9px",background:"transparent",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:3,cursor:"pointer",fontFamily:"inherit" }}>
-                <span style={{ fontSize:t.id==="coach"?15:18,lineHeight:1 }}>{t.icon}</span>
-                <span style={{ fontSize:9,letterSpacing:.3,color:tab===t.id?ACCENT:"#BBB",fontWeight:tab===t.id?700:400,transition:"color .2s" }}>{t.label}</span>
+              <button key={t.id} onClick={()=>setTab(t.id)} style={{ flex:1,padding:"13px 0 10px",background:"transparent",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:4,cursor:"pointer",fontFamily:"inherit" }}>
+                <span style={{ fontSize:11,letterSpacing:.4,color:tab===t.id?ACCENT:"#555",fontWeight:tab===t.id?700:400,transition:"color .2s" }}>{t.label}</span>
                 {tab===t.id && <div style={{ width:15,height:2,background:ACCENT,borderRadius:1 }} />}
               </button>
             ))}
