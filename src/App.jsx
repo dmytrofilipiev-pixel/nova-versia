@@ -884,22 +884,20 @@ function SettingsScreen({ state, onSave, onReset }) {
       {/* Notifications */}
       <Card style={{ marginBottom:18 }}>
         <div style={{ fontSize:13,color:ACCENT,fontWeight:700,marginBottom:14 }}>🔔 Нагадування</div>
+        <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
+          {[["РАНОК ☀",morningT,setMorningT],["ВЕЧІР 🌙",eveningT,setEveningT]].map(([l,v,s])=>(
+            <div key={l}>
+              <Label color="#666">{l}</Label>
+              <input type="time" value={v} onChange={e=>s(e.target.value)} style={{...IS,colorScheme:"dark"}} />
+            </div>
+          ))}
+        </div>
         {!notifOn ? (
-          <button onClick={enableNotif} style={{ width:"100%",padding:"12px 0",background:"rgba(200,169,110,0.07)",border:`1px solid rgba(200,169,110,0.25)`,color:ACCENT,borderRadius:10,fontSize:13,fontFamily:"inherit",cursor:"pointer" }}>
+          <button onClick={enableNotif} style={{ width:"100%",padding:"11px 0",background:"rgba(200,169,110,0.07)",border:`1px solid rgba(200,169,110,0.25)`,color:ACCENT,borderRadius:10,fontSize:13,fontFamily:"inherit",cursor:"pointer" }}>
             Увімкнути нагадування
           </button>
         ) : (
-          <>
-            <div style={{ fontSize:12,color:GREEN,marginBottom:13 }}>✓ Увімкнено</div>
-            <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12 }}>
-              {[["РАНОК ☀",morningT,setMorningT],["ВЕЧІР 🌙",eveningT,setEveningT]].map(([l,v,s])=>(
-                <div key={l}>
-                  <Label color="#666">{l}</Label>
-                  <input type="time" value={v} onChange={e=>s(e.target.value)} style={{...IS,colorScheme:"dark"}} />
-                </div>
-              ))}
-            </div>
-          </>
+          <div style={{ fontSize:12,color:GREEN }}>✓ Нагадування увімкнено</div>
         )}
       </Card>
 
