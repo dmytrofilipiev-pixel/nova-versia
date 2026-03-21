@@ -106,6 +106,17 @@ function saveData(d)    { lsSet(LS_KEY, d); }
 function todayKey()     { return new Date().toISOString().slice(0, 10); }
 function isEvening()    { return new Date().getHours() >= 17; }
 function daysSince(sd)  { return Math.min(21, Math.max(1, Math.floor((Date.now() - new Date(sd).getTime()) / 86400000) + 1)); }
+function calcStreak(state) {
+  const days = state.days || {};
+  let streak = 0;
+  for (let i = 0; i < 21; i++) {
+    const dK = new Date(new Date(state.startDate).getTime() + (daysSince(state.startDate) - 1 - i) * 86400000).toISOString().slice(0, 10);
+    const dd = days[dK] || {};
+    if (dd.morningDone || dd.eveningDone) streak++;
+    else break;
+  }
+  return streak;
+}
 
 // Проксі URL — міняй тільки тут, один раз
 const PROXY_URL = import.meta.env.VITE_PROXY_URL || "https://nova-versia-proxy.onrender.com";
@@ -243,9 +254,23 @@ function checkReminders(name) {
       const fk = `${type}_${todayKey()}_${hhmm}`;
       if (fired[fk]) return;
       if (Notification?.permission === "granted") {
-        new Notification("Нова версія себе", {
-          body: type === "morning" ? `${name}, час ранкового ритуалу ☀️` : `${name}, час вечірньої рефлексії 🌙`,
-        });
+        const morningMsgs = [
+          `${name}, як починається твій день?`,
+          `${name}, ранок — час задати тон дню.`,
+          `Новий день, ${name}. Хто ти сьогодні?`,
+          `${name}, 5 хвилин зараз змінять весь день.`,
+          `Ранок, ${name}. Нова версія вже прокинулась?`,
+        ];
+        const eveningMsgs = [
+          `${name}, як пройшов день? Час підбити.`,
+          `${name}, що сьогодні було важливим?`,
+          `Вечір, ${name}. Де сьогодні проявилась нова версія?`,
+          `${name}, 5 хвилин рефлексії — і день завершений правильно.`,
+          `Час зупинитись і побачити день, ${name}.`,
+        ];
+        const dow = new Date().getDay();
+        const msgs = type === "morning" ? morningMsgs : eveningMsgs;
+        new Notification("Нова версія себе", { body: msgs[dow % msgs.length] });
       }
       fired[fk] = 1;
       lsSet("nv_fired", fired);
@@ -295,7 +320,7 @@ function HabitRow({ habit, checked, onChange }) {
       cursor: "pointer", transition: "all 0.18s",
     }}>
       <span style={{ fontSize: 21 }}>{habit.icon}</span>
-      <span style={{ flex: 1, fontSize: 14, color: checked ? "#DDD" : "#666" }}>{habit.label}</span>
+      <span style={{ flex: 1, fontSize: 14, color: checked ? "#DDD" : "#999" }}>{habit.label}</span>
       <div style={{
         width: 23, height: 23, borderRadius: 7, flexShrink: 0,
         background: checked ? ACCENT : "transparent",
@@ -316,13 +341,14 @@ function SetupScreen({ onSetup }) {
   const [name, setName]         = useState("");
   const [identity, setIdentity] = useState("");
   const [avoid, setAvoid]       = useState("");
+  const [letter, setLetter] = useState("");
   const ok = identity.trim().length > 5;
   return (
     <div style={{ padding: "52px 24px 40px" }}>
       <div style={{ textAlign: "center", marginBottom: 44 }}>
         <div style={{ fontSize: 11, letterSpacing: 3, color: ACCENT, marginBottom: 14 }}>НОВА ВЕРСІЯ СЕБЕ</div>
         <div style={{ fontSize: 30, fontWeight: 800, color: "#FFF", lineHeight: 1.2 }}>21 день<br/>трансформації</div>
-        <div style={{ fontSize: 14, color: "#666", marginTop: 12 }}>Визнач ідентичність — і починаємо</div>
+        <div style={{ fontSize: 14, color: "#888", marginTop: 12 }}>Визнач ідентичність — і починаємо</div>
       </div>
       {[["ЯК ТЕБЕ ЗВАТИ", name, setName, "Дмитро"],
         ["МОЯ НОВА ВЕРСІЯ", identity, setIdentity, "Діяю чітко, будую системно, без сумнівів"],
@@ -333,7 +359,14 @@ function SetupScreen({ onSetup }) {
           <input value={v} onChange={e => s(e.target.value)} placeholder={p} style={IS} />
         </div>
       ))}
-      <button onClick={() => ok && onSetup({ name: name || "Воїн", identity, avoid })} style={{
+      <div style={{ marginBottom: 18 }}>
+        <Label>ЛИСТ СОБІ НА 21-Й ДЕНЬ</Label>
+        <div style={{ fontSize:12.5, color:"#888", marginBottom:9, lineHeight:1.6 }}>Напиши собі — яким ти хочеш вийти з цих 21 днів. Прочитаєш в кінці.</div>
+        <textarea value={letter} onChange={e => setLetter(e.target.value)}
+          placeholder="Дорогий я... через 21 день я хочу бути людиною яка..."
+          rows={4} style={{ ...IS, resize:"none", lineHeight:1.6, minHeight:100 }} />
+      </div>
+      <button onClick={() => ok && onSetup({ name: name || "Воїн", identity, avoid, letter })} style={{
         marginTop: 32, width: "100%", padding: "17px 0",
         background: ok ? ACCENT : "#161616", color: ok ? DARK : "#2E2E2E",
         border: "none", borderRadius: 14, fontSize: 16, fontWeight: 700,
@@ -354,6 +387,7 @@ function TodayScreen({ state, dayNum, onSave }) {
   const [saved, setSaved]     = useState(false);
   const [aiInsight, setAiInsight] = useState("");
   const [loadInsight, setLoadInsight] = useState(false);
+  const [showMirror, setShowMirror] = useState(false);
 
   useEffect(() => {
     setRating(mode === "morning" ? (td.morningRating||0) : (td.eveningRating||0));
@@ -394,19 +428,41 @@ function TodayScreen({ state, dayNum, onSave }) {
           <div>
             <span style={{ fontSize: 11, color: ACCENT, letterSpacing: 2 }}>ДЕНЬ </span>
             <span style={{ fontSize: 46, fontWeight: 800, color: "#FFF", lineHeight: 1 }}>{dayNum}</span>
-            <span style={{ fontSize: 13, color: "#666", marginLeft: 4 }}>/ 21</span>
+            <span style={{ fontSize: 13, color: "#888", marginLeft: 4 }}>/ 21</span>
           </div>
-          <div style={{ fontSize: 11, color: "#666", textAlign: "right", lineHeight: 1.7 }}>{WEEK_LABELS[weekIdx]}</div>
+          <div style={{ fontSize: 11, color: "#888", textAlign: "right", lineHeight: 1.7 }}>{WEEK_LABELS[weekIdx]}</div>
         </div>
-        <div style={{ height: 3, background: "#161616", borderRadius: 2 }}>
+        <div style={{ height: 3, background: "#161616", borderRadius: 2, marginBottom: 8 }}>
           <div style={{ height: "100%", borderRadius: 2, background: `linear-gradient(90deg,${ACCENT2},${ACCENT})`, width: `${(dayNum/21)*100}%`, transition: "width .6s ease" }} />
         </div>
+        {calcStreak(state) >= 2 && (
+          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+            <span style={{ fontSize:14 }}>🔥</span>
+            <span style={{ fontSize:12, color: calcStreak(state) >= 7 ? ACCENT : "#666", fontWeight: calcStreak(state) >= 7 ? 700 : 400 }}>
+              {calcStreak(state)} {calcStreak(state) === 1 ? "день поспіль" : calcStreak(state) < 5 ? "дні поспіль" : "днів поспіль"}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Quote */}
-      <div style={{ padding: "13px 17px", borderRadius: 12, marginBottom: 18, background: "rgba(200,169,110,0.05)", borderLeft: `3px solid ${ACCENT}` }}>
+      <div style={{ padding: "13px 17px", borderRadius: 12, marginBottom: 12, background: "rgba(200,169,110,0.05)", borderLeft: `3px solid ${ACCENT}` }}>
         <div style={{ fontSize: 13.5, color: ACCENT, fontStyle: "italic", lineHeight: 1.65 }}>«{DAILY_QUOTES[idx]}»</div>
       </div>
+
+      {/* Mirror button — shows every 3 days: day 3, 6, 9, 12... */}
+      {dayNum >= 3 && dayNum % 3 === 0 && (
+        <button onClick={() => setShowMirror(true)} style={{
+          width:"100%", padding:"10px 0", marginBottom:14,
+          background:"transparent", border:`1px solid rgba(200,169,110,0.2)`,
+          color:"#888", borderRadius:11, fontSize:12.5,
+          fontFamily:"inherit", cursor:"pointer",
+        }}>
+          🪞 Подивитись на свій прогрес
+        </button>
+      )}
+
+      {showMirror && <MirrorScreen state={state} dayNum={dayNum} onClose={() => setShowMirror(false)} />}
 
       {/* Toggle */}
       <div style={{ display: "flex", gap: 6, padding: 4, background: CARD3, borderRadius: 12, marginBottom: 18 }}>
@@ -428,7 +484,7 @@ function TodayScreen({ state, dayNum, onSave }) {
 
       {/* Identity */}
       <div style={{ padding: "10px 13px", borderRadius: 10, background: CARD3, border: `1px solid ${BORDER}`, marginBottom: 16 }}>
-        <div style={{ fontSize: 9.5, color: "#666", letterSpacing: 1, marginBottom: 4 }}>МОЯ НОВА ВЕРСІЯ</div>
+        <div style={{ fontSize: 9.5, color: "#888", letterSpacing: 1, marginBottom: 4 }}>МОЯ НОВА ВЕРСІЯ</div>
         <div style={{ fontSize: 13.5, color: "#999", lineHeight: 1.5 }}>{state.identity}</div>
       </div>
 
@@ -508,7 +564,7 @@ function TrackerScreen({ state, dayNum, onSave }) {
       <div style={{ display:"flex", alignItems:"center", gap:18, padding:"17px 19px", borderRadius:16, background:"rgba(200,169,110,0.04)", border:`1px solid rgba(200,169,110,0.1)`, marginBottom:22 }}>
         <div style={{ textAlign:"center", minWidth:52 }}>
           <div style={{ fontSize:42, fontWeight:800, color:ACCENT, lineHeight:1 }}>{done}</div>
-          <div style={{ fontSize:11, color:"#666" }}>/ {HABITS.length}</div>
+          <div style={{ fontSize:11, color:"#888" }}>/ {HABITS.length}</div>
         </div>
         <div style={{ flex:1 }}>
           <div style={{ fontSize:14, color:"#AAA", marginBottom:9 }}>
@@ -547,7 +603,7 @@ function TrackerScreen({ state, dayNum, onSave }) {
           {["Тиждень 1","Тиждень 2","Тиждень 3"].map((l,i)=>(
             <div key={l} style={{ display:"flex", alignItems:"center", gap:5 }}>
               <div style={{ width:9, height:9, borderRadius:2, background:WEEK_COLS[i] }} />
-              <span style={{ fontSize:11, color:"#666" }}>{l}</span>
+              <span style={{ fontSize:11, color:"#888" }}>{l}</span>
             </div>
           ))}
         </div>
@@ -589,7 +645,7 @@ function CoachScreen({ state, dayNum }) {
         <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
           <div>
             <Label style={{ marginBottom: 2 }}>AI-КОУЧ · АДАПТИВНИЙ</Label>
-            <div style={{ fontSize:11, color:"#666" }}>День {dayNum} · {Object.keys(state.days||{}).length} днів даних</div>
+            <div style={{ fontSize:11, color:"#888" }}>День {dayNum} · {Object.keys(state.days||{}).length} днів даних</div>
           </div>
 
         </div>
@@ -690,10 +746,10 @@ function StatsScreen({ state, dayNum }) {
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:22 }}>
         {[["Днів заповнено",filled,"/ 21"],["Звичок виконано",totalH,`/ ${dayNum*5}`],["Ранковий стан",avgM,"/ 10"],["Вечірній стан",avgE,"/ 10"]].map(([l,v,s])=>(
           <Card key={l}>
-            <div style={{ fontSize:10, color:"#666", marginBottom:6 }}>{l}</div>
+            <div style={{ fontSize:10, color:"#888", marginBottom:6 }}>{l}</div>
             <div style={{ display:"flex",alignItems:"baseline",gap:4 }}>
               <span style={{ fontSize:29,fontWeight:800,color:ACCENT }}>{v}</span>
-              <span style={{ fontSize:11,color:"#666" }}>{s}</span>
+              <span style={{ fontSize:11,color:"#888" }}>{s}</span>
             </div>
           </Card>
         ))}
@@ -703,8 +759,8 @@ function StatsScreen({ state, dayNum }) {
       <Card style={{ padding:"14px 6px 6px", marginBottom:18 }}>
         <ResponsiveContainer width="100%" height={135}>
           <LineChart data={chartData}>
-            <XAxis dataKey="day" tick={{fill:"#666",fontSize:10}} axisLine={false} tickLine={false} />
-            <YAxis domain={[0,10]} tick={{fill:"#666",fontSize:10}} axisLine={false} tickLine={false} width={20} />
+            <XAxis dataKey="day" tick={{fill:"#888",fontSize:10}} axisLine={false} tickLine={false} />
+            <YAxis domain={[0,10]} tick={{fill:"#888",fontSize:10}} axisLine={false} tickLine={false} width={20} />
             <Tooltip {...tt} />
             <Line type="monotone" dataKey="ранок" stroke={ACCENT2} strokeWidth={2} dot={false} connectNulls />
             <Line type="monotone" dataKey="вечір" stroke={ACCENT} strokeWidth={2} dot={false} connectNulls />
@@ -713,7 +769,7 @@ function StatsScreen({ state, dayNum }) {
         <div style={{ display:"flex",gap:14,justifyContent:"center",paddingTop:5 }}>
           {[["Ранок",ACCENT2],["Вечір",ACCENT]].map(([l,c])=>(
             <div key={l} style={{ display:"flex",alignItems:"center",gap:5 }}>
-              <div style={{ width:18,height:2,background:c }} /><span style={{ fontSize:11,color:"#666" }}>{l}</span>
+              <div style={{ width:18,height:2,background:c }} /><span style={{ fontSize:11,color:"#888" }}>{l}</span>
             </div>
           ))}
         </div>
@@ -723,8 +779,8 @@ function StatsScreen({ state, dayNum }) {
       <Card style={{ padding:"14px 6px 6px", marginBottom:22 }}>
         <ResponsiveContainer width="100%" height={105}>
           <BarChart data={chartData} barSize={7}>
-            <XAxis dataKey="day" tick={{fill:"#666",fontSize:10}} axisLine={false} tickLine={false} />
-            <YAxis domain={[0,5]} tick={{fill:"#666",fontSize:10}} axisLine={false} tickLine={false} width={16} />
+            <XAxis dataKey="day" tick={{fill:"#888",fontSize:10}} axisLine={false} tickLine={false} />
+            <YAxis domain={[0,5]} tick={{fill:"#888",fontSize:10}} axisLine={false} tickLine={false} width={16} />
             <Tooltip {...tt} />
             <Bar dataKey="звички" radius={[4,4,0,0]}>
               {chartData.map((_,i)=><Cell key={i} fill={i===dayNum-1?ACCENT:ACCENT2} fillOpacity={.75} />)}
@@ -848,8 +904,8 @@ function SettingsScreen({ state, onSave, onReset }) {
 
       {/* Reset */}
       <Card style={{ borderColor:"rgba(180,60,60,0.15)" }}>
-        <div style={{ fontSize:13,color:"#555",fontWeight:600,marginBottom:11 }}>🔄 Скидання циклу</div>
-        <div style={{ fontSize:12.5,color:"#333",lineHeight:1.6,marginBottom:13 }}>
+        <div style={{ fontSize:13,color:"#888",fontWeight:600,marginBottom:11 }}>🔄 Скидання циклу</div>
+        <div style={{ fontSize:12.5,color:"#666",lineHeight:1.6,marginBottom:13 }}>
           Новий 21-денний цикл. Профіль зберігається. Дані днів — видаляються.
         </div>
         {!confirmReset ? (
@@ -860,7 +916,7 @@ function SettingsScreen({ state, onSave, onReset }) {
           <div>
             <div style={{ fontSize:13,color:"#BB5555",marginBottom:11,textAlign:"center" }}>Впевнений? Дані 21 дня видаляться.</div>
             <div style={{ display:"flex",gap:9 }}>
-              <button onClick={()=>setConfirmReset(false)} style={{ flex:1,padding:"11px 0",background:CARD3,border:`1px solid ${BORDER}`,color:"#444",borderRadius:10,fontSize:13,fontFamily:"inherit",cursor:"pointer" }}>Скасувати</button>
+              <button onClick={()=>setConfirmReset(false)} style={{ flex:1,padding:"11px 0",background:CARD3,border:`1px solid ${BORDER}`,color:"#777",borderRadius:10,fontSize:13,fontFamily:"inherit",cursor:"pointer" }}>Скасувати</button>
               <button onClick={onReset} style={{ flex:1,padding:"11px 0",background:"rgba(180,60,60,0.12)",border:`1px solid rgba(180,60,60,0.35)`,color:"#BB5555",borderRadius:10,fontSize:13,fontFamily:"inherit",cursor:"pointer",fontWeight:700 }}>Скинути</button>
             </div>
           </div>
@@ -871,6 +927,170 @@ function SettingsScreen({ state, onSave, onReset }) {
 }
 
 // ─── ROOT APP ─────────────────────────────────────────────────────────────────
+// ─── PROGRESS MIRROR ─────────────────────────────────────────────────────────
+function MirrorScreen({ state, dayNum, onClose }) {
+  const days = state.days || {};
+  const keys = Object.keys(days).sort();
+  if (keys.length < 3) return null;
+
+  const firstKey = keys[0];
+  const lastKey  = keys[keys.length - 1];
+  const first    = days[firstKey] || {};
+  const last     = days[lastKey]  || {};
+
+  const firstRating = ((first.morningRating || 0) + (first.eveningRating || 0)) / 2;
+  const lastRating  = ((last.morningRating  || 0) + (last.eveningRating  || 0)) / 2;
+  const diff        = (lastRating - firstRating).toFixed(1);
+  const up          = lastRating >= firstRating;
+
+  const firstWords = [first.morningWord, first.eveningWord].filter(Boolean);
+  const lastWords  = [last.morningWord,  last.eveningWord ].filter(Boolean);
+
+  return (
+    <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.92)", zIndex:100, display:"flex", flexDirection:"column", justifyContent:"center", padding:"32px 24px", overflowY:"auto" }}>
+      <div style={{ fontSize:11, color:ACCENT, letterSpacing:2, marginBottom:8 }}>ТВОЄ ДЗЕРКАЛО</div>
+      <div style={{ fontSize:22, fontWeight:800, color:"#FFF", marginBottom:6, lineHeight:1.3 }}>
+        Ти на {dayNum} дні.<br/>Ось що змінилось.
+      </div>
+      <div style={{ fontSize:13, color:"#888", marginBottom:28 }}>День 1 → Сьогодні</div>
+
+      {/* Rating comparison */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
+        <div style={{ background:CARD2, border:`1px solid ${BORDER}`, borderRadius:14, padding:16 }}>
+          <div style={{ fontSize:10, color:"#888", marginBottom:8 }}>СТАН ДЕНЬ 1</div>
+          <div style={{ fontSize:34, fontWeight:800, color:"#888" }}>{firstRating.toFixed(1)}</div>
+          <div style={{ fontSize:10, color:"#777" }}>з 10</div>
+        </div>
+        <div style={{ background:CARD2, border:`1px solid ${up ? ACCENT : "#774444"}`, borderRadius:14, padding:16 }}>
+          <div style={{ fontSize:10, color:up ? ACCENT : "#BB5555", marginBottom:8 }}>СТАН ЗАРАЗ</div>
+          <div style={{ fontSize:34, fontWeight:800, color:up ? ACCENT : "#BB5555" }}>{lastRating.toFixed(1)}</div>
+          <div style={{ fontSize:10, color:up ? ACCENT : "#BB5555" }}>{up ? `+${diff}` : diff} від початку</div>
+        </div>
+      </div>
+
+      {/* First answer */}
+      {first.morningAnswer && (
+        <div style={{ marginBottom:14 }}>
+          <div style={{ fontSize:10, color:"#777", letterSpacing:1, marginBottom:7 }}>ТИ ПИСАВ НА ПОЧАТКУ</div>
+          <div style={{ padding:"13px 15px", borderRadius:12, background:"rgba(255,255,255,0.03)", border:`1px solid #1E1E1E`, fontSize:13.5, color:"#888", lineHeight:1.65, fontStyle:"italic" }}>
+            «{first.morningAnswer.slice(0, 200)}»
+          </div>
+        </div>
+      )}
+
+      {/* Last answer */}
+      {last.morningAnswer && last.morningAnswer !== first.morningAnswer && (
+        <div style={{ marginBottom:20 }}>
+          <div style={{ fontSize:10, color:ACCENT, letterSpacing:1, marginBottom:7 }}>ТИ ПИШЕШ ЗАРАЗ</div>
+          <div style={{ padding:"13px 15px", borderRadius:12, background:"rgba(200,169,110,0.05)", border:`1px solid rgba(200,169,110,0.2)`, fontSize:13.5, color:"#CCC", lineHeight:1.65, fontStyle:"italic" }}>
+            «{last.morningAnswer.slice(0, 200)}»
+          </div>
+        </div>
+      )}
+
+      {/* Words comparison */}
+      {(firstWords.length > 0 || lastWords.length > 0) && (
+        <div style={{ marginBottom:24 }}>
+          <div style={{ display:"flex", gap:10 }}>
+            {firstWords.length > 0 && (
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:10, color:"#777", marginBottom:6 }}>СЛОВА ДЕНЬ 1</div>
+                <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+                  {firstWords.map((w,i) => <span key={i} style={{ padding:"4px 10px", borderRadius:20, background:"#111", border:`1px solid #1E1E1E`, fontSize:12, color:"#888" }}>{w}</span>)}
+                </div>
+              </div>
+            )}
+            {lastWords.length > 0 && (
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:10, color:ACCENT, marginBottom:6 }}>СЛОВА ЗАРАЗ</div>
+                <div style={{ display:"flex", gap:5, flexWrap:"wrap" }}>
+                  {lastWords.map((w,i) => <span key={i} style={{ padding:"4px 10px", borderRadius:20, background:"rgba(200,169,110,0.08)", border:`1px solid rgba(200,169,110,0.25)`, fontSize:12, color:ACCENT }}>{w}</span>)}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <button onClick={onClose} style={{ width:"100%", padding:"15px 0", background:ACCENT, color:DARK, border:"none", borderRadius:14, fontSize:15, fontWeight:700, fontFamily:"inherit", cursor:"pointer" }}>
+        Продовжую шлях
+      </button>
+    </div>
+  );
+}
+
+// ─── FINALE SCREEN ────────────────────────────────────────────────────────────
+function FinaleScreen({ state, onReset }) {
+  const days    = state.days || {};
+  const keys    = Object.keys(days).sort();
+  const total   = keys.length;
+  const habits  = Object.values(days).reduce((s,d) => s + HABITS.filter(h => d.habits?.[h.id]).length, 0);
+  const ratings = keys.map(k => ((days[k].morningRating||0) + (days[k].eveningRating||0)) / 2).filter(Boolean);
+  const avgStart = ratings.slice(0,3).reduce((s,v) => s+v, 0) / Math.max(1, Math.min(3, ratings.length));
+  const avgEnd   = ratings.slice(-3).reduce((s,v) => s+v, 0) / Math.max(1, ratings.slice(-3).length);
+  const growth   = (avgEnd - avgStart).toFixed(1);
+  const words    = keys.flatMap(k => [days[k].morningWord, days[k].eveningWord]).filter(Boolean);
+  const uniqueWords = [...new Set(words)].slice(0, 8);
+
+  return (
+    <div style={{ minHeight:"100vh", background:DARK, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 24px", textAlign:"center" }}>
+      <div style={{ fontSize:52, marginBottom:16 }}>🏆</div>
+      <div style={{ fontSize:11, color:ACCENT, letterSpacing:3, marginBottom:12 }}>21 ДЕНЬ ПРОЙДЕНО</div>
+      <div style={{ fontSize:28, fontWeight:800, color:"#FFF", lineHeight:1.25, marginBottom:8 }}>
+        {state.name},<br/>ти зробив це.
+      </div>
+      <div style={{ fontSize:14, color:"#888", marginBottom:36, lineHeight:1.6 }}>
+        Нова версія більше не ціль.<br/>Вона — реальність.
+      </div>
+
+      {/* Stats */}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, width:"100%", maxWidth:320, marginBottom:28 }}>
+        {[
+          ["Днів заповнено", `${total} / 21`],
+          ["Звичок виконано", `${habits}`],
+          ["Ріст стану", growth > 0 ? `+${growth}` : growth],
+          ["Слів-якорів", `${uniqueWords.length}`],
+        ].map(([l,v]) => (
+          <div key={l} style={{ background:CARD2, border:`1px solid ${BORDER}`, borderRadius:14, padding:"14px 12px" }}>
+            <div style={{ fontSize:10, color:"#888", marginBottom:6 }}>{l}</div>
+            <div style={{ fontSize:26, fontWeight:800, color:ACCENT }}>{v}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Words */}
+      {uniqueWords.length > 0 && (
+        <div style={{ marginBottom:28, width:"100%", maxWidth:320 }}>
+          <div style={{ fontSize:10, color:"#888", letterSpacing:1, marginBottom:10 }}>ТВОЇ СЛОВА ЦИХ 21 ДНІВ</div>
+          <div style={{ display:"flex", flexWrap:"wrap", gap:6, justifyContent:"center" }}>
+            {uniqueWords.map((w,i) => (
+              <span key={i} style={{ padding:"5px 12px", borderRadius:20, background:"rgba(200,169,110,0.08)", border:`1px solid rgba(200,169,110,0.2)`, fontSize:13, color:ACCENT }}>{w}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {state.letter && (
+        <div style={{ width:"100%", maxWidth:320, marginBottom:24 }}>
+          <div style={{ fontSize:10, color:"#777", letterSpacing:1, marginBottom:8 }}>ЛИСТ ЯКИЙ ТИ НАПИСАВ НА ПОЧАТКУ</div>
+          <div style={{ padding:"16px", borderRadius:14, background:"rgba(200,169,110,0.05)", border:`1px solid rgba(200,169,110,0.15)`, fontSize:13.5, color:"#AAA", lineHeight:1.75, fontStyle:"italic", textAlign:"left" }}>
+            «{state.letter}»
+          </div>
+        </div>
+      )}
+      <div style={{ fontSize:13, color:"#666", lineHeight:1.7, marginBottom:32, maxWidth:280 }}>
+        «{state.identity}»<br/>
+        <span style={{ fontSize:11, color:"#222" }}>— ти визначив це 21 день тому. І підтвердив.</span>
+      </div>
+
+      <button onClick={onReset} style={{ width:"100%", maxWidth:320, padding:"16px 0", background:ACCENT, color:DARK, border:"none", borderRadius:14, fontSize:15, fontWeight:700, fontFamily:"inherit", cursor:"pointer", marginBottom:12 }}>
+        Почати новий цикл →
+      </button>
+      <div style={{ fontSize:12, color:"#666" }}>Твої дані збережуться</div>
+    </div>
+  );
+}
+
 const TABS = [
   {id:"today",   label:"Сьогодні"},
   {id:"tracker", label:"Трекер"  },
@@ -927,7 +1147,10 @@ export default function App() {
 
       {!state ? <SetupScreen onSetup={handleSetup} /> : (
         <>
-          <div style={{ paddingBottom:72 }}>
+          {dayNum >= 21 && Object.keys(state.days||{}).length >= 18 && (
+            <FinaleScreen state={state} onReset={handleReset} />
+          )}
+          <div style={{ paddingBottom:72, display: dayNum >= 21 && Object.keys(state.days||{}).length >= 18 ? "none" : "block" }}>
             {tab==="today"    && <TodayScreen    state={state} dayNum={dayNum} onSave={setState} />}
             {tab==="tracker"  && <TrackerScreen  state={state} dayNum={dayNum} onSave={setState} />}
             {tab==="coach"    && <CoachScreen    state={state} dayNum={dayNum} />}
@@ -938,7 +1161,7 @@ export default function App() {
           <div style={{ position:"fixed",bottom:0,left:0,right:0,background:"rgba(8,8,8,0.97)",borderTop:`1px solid ${BORDER}`,display:"flex",backdropFilter:"blur(24px)",paddingBottom:"env(safe-area-inset-bottom,0)" }}>
             {TABS.map(t=>(
               <button key={t.id} onClick={()=>setTab(t.id)} style={{ flex:1,padding:"13px 0 10px",background:"transparent",border:"none",display:"flex",flexDirection:"column",alignItems:"center",gap:4,cursor:"pointer",fontFamily:"inherit" }}>
-                <span style={{ fontSize:11,letterSpacing:.4,color:tab===t.id?ACCENT:"#555",fontWeight:tab===t.id?700:400,transition:"color .2s" }}>{t.label}</span>
+                <span style={{ fontSize:11,letterSpacing:.4,color:tab===t.id?ACCENT:"#888",fontWeight:tab===t.id?700:400,transition:"color .2s" }}>{t.label}</span>
                 {tab===t.id && <div style={{ width:15,height:2,background:ACCENT,borderRadius:1 }} />}
               </button>
             ))}
