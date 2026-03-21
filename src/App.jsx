@@ -615,7 +615,18 @@ function TrackerScreen({ state, dayNum, onSave }) {
 function CoachScreen({ state, dayNum }) {
   const ctx = buildUserContext(state);
   const openings = [`${state.name}, день ${dayNum}. Що зараз?`, `${state.name}. Як пройшло сьогодні?`, `День ${dayNum}. Що на душі, ${state.name}?`, `${state.name}, слухаю.`, `Що хочеш розібрати сьогодні, ${state.name}?`];
-  const [msgs, setMsgs] = useState([{ role: "assistant", content: openings[dayNum % openings.length] }]);
+  const CHAT_KEY = `nv_chat_${todayKey()}`;
+  const [msgs, setMsgsRaw] = useState(() => {
+    const saved = ls(CHAT_KEY);
+    return saved || [{ role: "assistant", content: openings[dayNum % openings.length] }];
+  });
+  const setMsgs = (updater) => {
+    setMsgsRaw(prev => {
+      const next = typeof updater === "function" ? updater(prev) : updater;
+      lsSet(CHAT_KEY, next);
+      return next;
+    });
+  };
   const [input, setInput]     = useState("");
   const [loading, setLoading] = useState(false);
   const bottomRef = useRef(null);
@@ -684,11 +695,10 @@ function CoachScreen({ state, dayNum }) {
 
       {/* Quick prompts */}
       <div style={{ padding:"5px 20px", display:"flex", gap:7, overflowX:"auto" }}>
-          {quick.map(q=>(
-            <button key={q} onClick={()=>send(q)} style={{ padding:"6px 11px",borderRadius:18,flexShrink:0,background:"transparent",border:`1px solid ${BORDER}`,color:"#383838",fontSize:12,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap" }}>{q}</button>
-          ))}
-        </div>
-      )}
+        {quick.map(q=>(
+          <button key={q} onClick={()=>send(q)} style={{ padding:"6px 11px",borderRadius:18,flexShrink:0,background:"transparent",border:`1px solid ${BORDER}`,color:"#555",fontSize:12,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap" }}>{q}</button>
+        ))}
+      </div>
 
       {/* Input */}
       <div style={{ padding:"9px 20px 20px", borderTop:`1px solid ${BORDER}`, display:"flex", gap:9, alignItems:"flex-end" }}>
@@ -835,7 +845,7 @@ function SettingsScreen({ state, onSave, onReset }) {
   const reminders                = ls("nv_reminders",{});
   const [morningT, setMorningT] = useState(reminders.morning?.time||"07:00");
   const [eveningT, setEveningT] = useState(reminders.evening?.time||"20:00");
-  const [notifOn, setNotifOn]   = useState(Notification?.permission==="granted");
+  const [notifOn, setNotifOn]   = useState(() => { try { return Notification?.permission === "granted"; } catch { return false; } });
   const [saved, setSaved]             = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
 
@@ -848,10 +858,12 @@ function SettingsScreen({ state, onSave, onReset }) {
 
 
   const enableNotif = async () => {
-    if(!("Notification" in window)) return;
-    const p = await Notification.requestPermission();
-    setNotifOn(p==="granted");
-    if(p==="granted"){ scheduleReminder("morning",morningT,name); scheduleReminder("evening",eveningT,name); }
+    try {
+      if(!("Notification" in window)) return;
+      const p = await Notification.requestPermission();
+      setNotifOn(p==="granted");
+      if(p==="granted"){ scheduleReminder("morning",morningT,name); scheduleReminder("evening",eveningT,name); }
+    } catch(e) { console.log("Notifications not supported", e); }
   };
 
   return (
@@ -1105,7 +1117,7 @@ export default function App() {
   useEffect(()=>{
     const d = loadData();
     setState(d||false);
-    if("Notification" in window && Notification.permission==="default") Notification.requestPermission();
+    try { if("Notification" in window && Notification.permission==="default") Notification.requestPermission(); } catch(e) {}
   },[]);
 
   useEffect(()=>{
