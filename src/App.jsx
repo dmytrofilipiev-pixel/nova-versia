@@ -167,7 +167,6 @@ ${answers.map(a => `• ${a.slice(0, 130)}`).join("\n")}
 
 // ─── API ─────────────────────────────────────────────────────────────────────
 // Ключ живе на сервері (Render). Клієнт не знає про нього нічого.
-const PROXY_URL = import.meta.env.VITE_PROXY_URL || "https://nova-versia-proxy.onrender.com";
 
 async function callClaude(messages, system) {
   try {
