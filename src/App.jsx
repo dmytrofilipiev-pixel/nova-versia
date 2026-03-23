@@ -1080,12 +1080,18 @@ function SettingsScreen({ state, onSave, onReset }) {
       <Card style={{ marginBottom:18 }}>
         <div style={{ fontSize:13,color:ACCENT,fontWeight:700,marginBottom:14 }}>🔔 Нагадування</div>
         <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12 }}>
-          {[["РАНОК ☀",morningT,setMorningT],["ВЕЧІР 🌙",eveningT,setEveningT]].map(([l,v,s])=>(
+          {[["РАНОК ☀",morningT,setMorningT,"morning"],["ВЕЧІР 🌙",eveningT,setEveningT,"evening"]].map(([l,v,s,type])=>(
             <div key={l}>
               <Label color="#666">{l}</Label>
-              <input type="time" value={v} onChange={e=>s(e.target.value)} style={{...IS,colorScheme:"dark"}} />
+              <input type="time" value={v} onChange={e=>{
+                s(e.target.value);
+                scheduleReminder(type, e.target.value, name);
+              }} style={{...IS,colorScheme:"dark"}} />
             </div>
           ))}
+        </div>
+        <div style={{ fontSize:11, color:"#555", marginBottom:10, lineHeight:1.6 }}>
+          ⚠️ Нагадування працюють тільки поки додаток відкритий у фоні. Для надійних сповіщень використовуй календар телефону.
         </div>
         {!notifOn ? (
           <button onClick={enableNotif} style={{ width:"100%",padding:"11px 0",background:"rgba(200,169,110,0.07)",border:`1px solid rgba(200,169,110,0.25)`,color:ACCENT,borderRadius:10,fontSize:13,fontFamily:"inherit",cursor:"pointer" }}>
