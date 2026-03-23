@@ -98,6 +98,8 @@ const GREEN   = "#7A9E7E";
 
 // ─── STORAGE ─────────────────────────────────────────────────────────────────
 const LS_KEY = "nova_versia_v2";
+const ACCESS_CODE = "nova2025"; // змінюй тут свій пароль
+const ACCESS_KEY  = "nv_access";
 const ls     = (k, fb = null) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : fb; } catch { return fb; } };
 const lsSet  = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
 
@@ -356,6 +358,70 @@ function HabitRow({ habit, checked, onChange }) {
 }
 
 
+
+// ─── PASSWORD GATE ───────────────────────────────────────────────────────────
+function PasswordScreen({ onAccess }) {
+  const [code, setCode]   = useState("");
+  const [error, setError] = useState(false);
+  const [show, setShow]   = useState(false);
+
+  const check = () => {
+    if (code.trim().toLowerCase() === ACCESS_CODE.toLowerCase()) {
+      lsSet(ACCESS_KEY, "1");
+      onAccess();
+    } else {
+      setError(true);
+      setTimeout(() => setError(false), 2000);
+    }
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:DARK, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 24px" }}>
+      <div style={{ width:"100%", maxWidth:320 }}>
+        <div style={{ textAlign:"center", marginBottom:40 }}>
+          <div style={{ fontSize:11, letterSpacing:3, color:ACCENT, marginBottom:14 }}>НОВА ВЕРСІЯ СЕБЕ</div>
+          <div style={{ fontSize:26, fontWeight:800, color:"#FFF", lineHeight:1.3 }}>Введи код доступу</div>
+          <div style={{ fontSize:13, color:"#555", marginTop:10 }}>Отримай код від свого коуча або психолога</div>
+        </div>
+
+        <Label>КОД ДОСТУПУ</Label>
+        <div style={{ position:"relative", marginBottom:16 }}>
+          <input
+            value={code}
+            onChange={e => { setCode(e.target.value); setError(false); }}
+            onKeyDown={e => e.key === "Enter" && check()}
+            placeholder="Введи код..."
+            type={show ? "text" : "password"}
+            style={{
+              ...IS,
+              paddingRight:48,
+              borderColor: error ? "#BB5555" : BORDER,
+              transition:"border-color .2s",
+            }}
+          />
+          <button onClick={() => setShow(v => !v)} style={{
+            position:"absolute", right:12, top:"50%", transform:"translateY(-50%)",
+            background:"none", border:"none", color:"#555", cursor:"pointer", fontSize:16, padding:4,
+          }}>{show ? "🙈" : "👁"}</button>
+        </div>
+
+        {error && (
+          <div style={{ fontSize:13, color:"#BB5555", marginBottom:12, textAlign:"center" }}>
+            Невірний код. Спробуй ще раз.
+          </div>
+        )}
+
+        <button onClick={check} disabled={!code.trim()} style={{
+          width:"100%", padding:"15px 0",
+          background: code.trim() ? ACCENT : "#161616",
+          color: code.trim() ? DARK : "#333",
+          border:"none", borderRadius:13, fontSize:15, fontWeight:700,
+          fontFamily:"inherit", cursor: code.trim() ? "pointer" : "default", transition:"all .2s",
+        }}>Увійти →</button>
+      </div>
+    </div>
+  );
+}
 
 // ─── SETUP ────────────────────────────────────────────────────────────────────
 const STEPS = [
@@ -1238,8 +1304,9 @@ const TABS = [
 ];
 
 export default function App() {
-  const [state, setState] = useState(null);
-  const [tab, setTab]     = useState("today");
+  const [state, setState]     = useState(null);
+  const [tab, setTab]         = useState("today");
+  const [hasAccess, setAccess] = useState(() => ls(ACCESS_KEY) === "1");
 
   useEffect(()=>{
     const d = loadData();
@@ -1259,13 +1326,22 @@ export default function App() {
   };
 
   const handleReset = () => {
-    const ns = {...state,startDate:todayKey(),days:{}};
-    saveData(ns); setState(ns); setTab("today");
+    // Full reset — clear profile so questionnaire shows again
+    saveData(false);
+    setState(false);
+    setTab("today");
   };
 
   if(state===null) return (
     <div style={{ background:DARK,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center" }}>
       <div style={{ width:26,height:26,border:`2px solid #161616`,borderTop:`2px solid ${ACCENT}`,borderRadius:"50%",animation:"spin .8s linear infinite" }} />
+    </div>
+  );
+
+  if(!hasAccess) return (
+    <div style={{ background:DARK,minHeight:"100vh",fontFamily:"-apple-system,'Helvetica Neue',sans-serif",color:"#EEE" }}>
+      <style>{`*{-webkit-tap-highlight-color:transparent;box-sizing:border-box}input{-webkit-appearance:none}input:focus{border-color:${ACCENT}!important;outline:none}`}</style>
+      <PasswordScreen onAccess={() => setAccess(true)} />
     </div>
   );
 
