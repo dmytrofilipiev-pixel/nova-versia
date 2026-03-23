@@ -125,43 +125,66 @@ const PROXY_URL = import.meta.env.VITE_PROXY_URL || "https://nova-versia-proxy.o
 function buildUserContext(state) {
   const days = state.days || {};
   const keys = Object.keys(days).sort();
-  if (!keys.length) return "";
+  const p = state.profile || {};
 
   const ratings = keys.map(k => ({ m: days[k].morningRating || 0, e: days[k].eveningRating || 0 }));
   const avgOf = (arr) => (arr.reduce((s, v) => s + v, 0) / Math.max(1, arr.filter(Boolean).length)).toFixed(1);
-  const avgM = avgOf(ratings.map(r => r.m));
-  const avgE = avgOf(ratings.map(r => r.e));
+  const avgM = keys.length ? avgOf(ratings.map(r => r.m)) : "—";
+  const avgE = keys.length ? avgOf(ratings.map(r => r.e)) : "—";
 
   const avg3 = (arr) => arr.reduce((s, v) => s + v, 0) / Math.max(1, arr.length);
   const first3 = ratings.slice(0, 3).map(r => (r.m + r.e) / 2).filter(Boolean);
   const last3  = ratings.slice(-3).map(r => (r.m + r.e) / 2).filter(Boolean);
-  const trend  = avg3(last3) > avg3(first3) ? "зростає 📈" : avg3(last3) < avg3(first3) ? "знижується ⚠️" : "стабільний";
+  const trend  = !keys.length ? "немає даних" : avg3(last3) > avg3(first3) ? "зростає 📈" : avg3(last3) < avg3(first3) ? "знижується ⚠️" : "стабільний";
 
-  const hCounts = {};
-  HABITS.forEach(h => { hCounts[h.id] = keys.filter(k => days[k].habits?.[h.id]).length; });
-  const best  = HABITS.reduce((b, h) => hCounts[h.id] > hCounts[b.id] ? h : b, HABITS[0]);
-  const worst = HABITS.reduce((w, h) => hCounts[h.id] < hCounts[w.id] ? h : w, HABITS[0]);
+  // Detect energy from recent answers
+  const recentAnswers = keys.slice(-3).flatMap(k => [days[k].morningAnswer, days[k].eveningAnswer]).filter(Boolean);
+  const avgLen = recentAnswers.length ? recentAnswers.reduce((s,a) => s + a.length, 0) / recentAnswers.length : 0;
+  const energySignal = avgLen < 30 ? "LOW" : avgLen > 100 ? "HIGH" : "NORMAL";
+
+  // Days since last activity
+  const lastKey = keys[keys.length - 1];
+  const daysSinceLast = lastKey ? Math.floor((Date.now() - new Date(lastKey).getTime()) / 86400000) : 0;
+  const riskSignal = daysSinceLast >= 2 ? "RISK_DROPOUT" : energySignal === "LOW" ? "RISK_LOW_ENERGY" : "OK";
 
   const recentKeys = keys.slice(-7);
   const words   = recentKeys.flatMap(k => [days[k].morningWord, days[k].eveningWord]).filter(Boolean);
   const answers = recentKeys.flatMap(k => [days[k].morningAnswer, days[k].eveningAnswer]).filter(Boolean).slice(-6);
 
   return `
-=== ПЕРСОНАЛЬНИЙ ПРОФІЛЬ (${state.name}) ===
-Нова версія: "${state.identity}"
-Уникає: "${state.avoid || "—"}"
-День: ${daysSince(state.startDate)} / 21 | Заповнено: ${keys.length} днів
+=== ПРОФІЛЬ ЛЮДИНИ (${state.name}, ${p.age || "вік не вказано"}) ===
 
+НОВА ІДЕНТИЧНІСТЬ: "${state.identity}"
+УНИКАЄ: "${state.avoid || "—"}"
+СЛОВО-ЯКІР: "${state.anchor || "—"}"
+ЦІЛЬ 21 ДЕНЬ: "${p.goal21 || "—"}"
+ГЛИБИННА ПРИЧИНА: "${p.deepWhy || "—"}"
+
+ДЕ ЗАСТРЯГ: "${p.stuck || "—"}"
+ПАТЕРН ВІДКАТУ: "${p.pattern || "—"}"
+ТРИГЕРИ: "${p.triggers || "—"}"
+ЩО КАЖЕ СОБІ КОЛИ ЗДАЄТЬСЯ: "${p.selfTalk || "—"}"
+ЩО ДОПОМАГАЄ ВИЙТИ: "${p.rescue || "—"}"
+
+СТИЛЬ КОУЧА: "${p.coachStyle || "прямий і теплий"}"
+МОТИВУЄ: "${p.motivation || "виклик"}"
+СЛОВА ЯКІ РЕЗОНУЮТЬ: "${p.inspireWords || "—"}"
+ПОРОЖНІ СЛОВА: "${p.emptyWords || "—"}"
+ТАБУ ТЕМИ: "${p.taboo || "немає"}"
+
+=== СТАН ЗАРАЗ ===
+День: ${daysSince(state.startDate)} / 21 | Заповнено: ${keys.length} днів
 Стан ранок/вечір: ${avgM} / ${avgE} із 10
 Тренд: ${trend}
+Останні слова: ${words.slice(-6).join(", ") || "—"}
 
-Топ звичка: ${best.label} (${hCounts[best.id]}/${keys.length} днів)
-Слабка звичка: ${worst.label} (${hCounts[worst.id]}/${keys.length} днів)
-
-Останні слова-якорі: ${words.slice(-8).join(", ") || "—"}
+=== СИГНАЛ ДЛЯ КОУЧА: ${riskSignal} ===
+${riskSignal === "RISK_DROPOUT" ? `⚠️ Людина не заходила ${daysSinceLast} дні — ризик відкату. Повертай через ідентичність, не через провину.` : ""}
+${riskSignal === "RISK_LOW_ENERGY" ? "⚠️ Відповіді короткі — низька енергія. Змінюй тон на провокуючий, задай один гострий виклик." : ""}
+${riskSignal === "OK" && energySignal === "HIGH" ? "✅ Висока енергія — закріплюй і рухай далі." : ""}
 
 Останні відповіді:
-${answers.map(a => `• ${a.slice(0, 130)}`).join("\n")}
+${answers.map(a => `• ${a.slice(0, 150)}`).join("\n")}
 === КІНЕЦЬ ПРОФІЛЮ ===`;
 }
 
@@ -190,30 +213,29 @@ async function callClaude(messages, system) {
 }
 
 async function askCoach(messages, dayNum, ctx) {
-  return callClaude(messages, `Ти — живий коуч. Не бот, не асистент, не програма. Людина яка добре знає цю людину і справді дбає про її ріст.
+  return callClaude(messages, `Ти — живий коуч. Не бот, не асистент. Людина яка добре знає цю людину і справді дбає про її ріст.
 
 ТВОЯ ОСОБИСТІСТЬ:
-— Говориш як близький наставник: тепло, але без сюсюкань
-— Мудрий — краще одне влучне речення ніж п'ять порожніх
-— Інколи провокуєш — не даєш залишатись у зоні комфорту коли бачиш що людина застрягла
-—Ніколи не кажеш "як AI" або "я не можу" — ти просто людина яка допомагає
-— Не починаєш з компліментів типу "Чудово!", "Супер!", "Молодець!"
-— Не використовуєш списки з крапками — говориш живими реченнями
-— Не повторюєш те що сказала людина — відразу реагуєш по суті
+— Говориш як близький наставник: тепло але без сюсюкань
+— Мудрий — одне влучне речення краще п'яти порожніх
+— Ніколи не кажеш "як AI" або "я не можу"
+— Не починаєш з "Чудово!", "Супер!", "Молодець!"
+— Не використовуєш списки — говориш живими реченнями
+— Використовуєш слова з профілю людини — ті що їй резонують
 
-ЯК ТИ СПІЛКУЄШСЯ:
-— Звертаєшся по імені але не в кожному реченні — природно
-— Посилаєшся на конкретні дані з профілю щоб людина відчула що ти її знаєш
-— Інколи ставиш одне гостре запитання замість відповіді — щоб людина сама дійшла
-— Якщо людина скаржиться — не жалієш, а м'яко повертаєш до дії
-— Якщо людина молодець — визнаєш це одним реченням і одразу рухаєшся далі
-— Розмовна мова, без канцеляризмів, без пафосу
+АДАПТИВНИЙ СТИЛЬ (читай сигнал з профілю):
+— Сигнал RISK_DROPOUT: людина зникла — не картай, повертай через ідентичність. "Ти казав що нова версія робить X — де вона зараз?"
+— Сигнал RISK_LOW_ENERGY: відповіді короткі, енергія низька — один провокуючий виклик. Не питай "як справи?" — дай конкретне завдання прямо зараз.
+— Сигнал OK + висока енергія — закріплюй і рухай далі, додавай виклик більшого масштабу.
 
-КОНТЕКСТ СЕСІЇ:
-День ${dayNum} з 21. Аудиторія — різні люди які хочуть змінити себе.
-Кожна розмова починається заново — але ти маєш профіль людини і поводишся так ніби знаєш її давно.
+ЯК ГОВОРИШ:
+— Звертаєшся по імені але не в кожному реченні
+— Посилаєшся на конкретні дані з профілю
+— Інколи одне гостре запитання замість відповіді
+— Якщо людина скаржиться — не жалієш, повертаєш до дії
+— Мова: українська, розмовна, без пафосу
 
-Максимум 3-4 речення на відповідь. Мова: українська.
+День ${dayNum} з 21. Максимум 3-4 речення.
 
 ${ctx}`);
 }
@@ -336,41 +358,148 @@ function HabitRow({ habit, checked, onChange }) {
 
 
 // ─── SETUP ────────────────────────────────────────────────────────────────────
+const STEPS = [
+  { id:"who",   title:"Хто ти зараз",        subtitle:"Чесно — без прикрас" },
+  { id:"new",   title:"Хто ти хочеш стати",  subtitle:"Нова версія — конкретно" },
+  { id:"triggers", title:"Твої тригери",     subtitle:"Що повертає до старого" },
+  { id:"language", title:"Твоя мова",        subtitle:"Як з тобою говорити" },
+  { id:"goal",  title:"Твоя ціль",           subtitle:"Що змінюється за 21 день" },
+];
+
 function SetupScreen({ onSetup }) {
-  const [name, setName]         = useState("");
-  const [identity, setIdentity] = useState("");
-  const [avoid, setAvoid]       = useState("");
-  const [letter, setLetter] = useState("");
-  const ok = identity.trim().length > 5;
+  const [step, setStep] = useState(0);
+  const [data, setData] = useState({
+    name:"", age:"", stuck:"", tried:"", pattern:"",
+    identity:"", newActions:"", newReactions:"", avoid:"", anchor:"",
+    triggers:"", selfTalk:"", influences:"", worstDay:"", rescue:"",
+    inspireWords:"", emptyWords:"", coachStyle:"", motivation:"", taboo:"",
+    goal21:"", successSign:"", bigWin:"", deepWhy:"", letter:"",
+  });
+
+  const set = (k, v) => setData(p => ({...p, [k]: v}));
+
+  const FIELDS = [
+    // Step 0 — Хто ти зараз
+    [
+      ["ЯК ТЕБЕ ЗВАТИ", "name", "text", "Дмитро", false],
+      ["СКІЛЬКИ ТОБІ РОКІВ", "age", "text", "32", false],
+      ["ДЕ ТИ ЗАСТРЯГ — ОДНИМ РЕЧЕННЯМ", "stuck", "area", "Постійно відкладаю важливі рішення...", true],
+      ["ЩО ВЖЕ ПРОБУВАВ ЗМІНИТИ АЛЕ НЕ ВИЙШЛО", "tried", "area", "Починав з понеділка десятки разів...", false],
+      ["ЩО ВІДБУВАЄТЬСЯ ПІСЛЯ ТОГО ЯК ПОЧИНАЄШ З ПОНЕДІЛКА", "pattern", "area", "Тримаюсь 3-5 днів потім повертаюсь...", false],
+    ],
+    // Step 1 — Хто хочеш стати
+    [
+      ["МОЯ НОВА ВЕРСІЯ — ХТО ЦЯ ЛЮДИНА", "identity", "area", "Діяю чітко, вирішую без вагань, будую системно...", true],
+      ["ЩО ЦЯ ЛЮДИНА РОБИТЬ ЩОДНЯ", "newActions", "area", "Починає ранок з ритуалу, не перевіряє телефон першу годину...", false],
+      ["ЯК РЕАГУЄ НА ТРУДНОЩІ — КОНКРЕТНО", "newReactions", "area", "Робить паузу 3 секунди, обирає реакцію свідомо...", false],
+      ["ЩО НОВА ВЕРСІЯ НЕ РОБИТЬ", "avoid", "area", "Не відкладає, не пояснює старому собі...", false],
+      ["ОДНЕ СЛОВО ЯКЕ ОПИСУЄ НОВУ ВЕРСІЮ", "anchor", "text", "Сила", false],
+    ],
+    // Step 2 — Тригери
+    [
+      ["ЩО ПОВЕРТАЄ ДО СТАРОЇ ПОВЕДІНКИ", "triggers", "area", "Стрес на роботі, конфлікт вдома...", true],
+      ["ЩО КАЖЕШ СОБІ КОЛИ ЗДАЄШСЯ — ДОСЛІВНО", "selfTalk", "area", "Завтра почну, сьогодні не той день...", false],
+      ["ХТО АБО ЩО НАЙБІЛЬШЕ ВПЛИВАЄ НА ТВІЙ СТАН", "influences", "area", "Певні люди, соцмережі, новини...", false],
+      ["ЯК ВИГЛЯДАЄ ТВІЙ НАЙГІРШИЙ ДЕНЬ", "worstDay", "area", "Прокидаюсь без енергії, уникаю всього важливого...", false],
+      ["ЩО ЗАЗВИЧАЙ ДОПОМАГАЄ ВИЙТИ З ПОГАНОГО СТАНУ", "rescue", "area", "Прогулянка, розмова з другом, спорт...", false],
+    ],
+    // Step 3 — Мова
+    [
+      ["СЛОВА ЯКІ ТЕБЕ НАДИХАЮТЬ — 5-7 СЛІВ", "inspireWords", "text", "Дія, сила, рух, прорив, ясність", false],
+      ["СЛОВА ЯКІ ЗДАЮТЬСЯ ПОРОЖНІМИ АБО ДРАТУЮТЬ", "emptyWords", "text", "Успіх, позитив, мотивація...", false],
+      ["ЯК З ТОБОЮ МАЄ ГОВОРИТИ КОУЧ", "coachStyle", "text", "Прямо і жорстко / м'яко / з гумором", false],
+      ["ЩО МОТИВУЄ БІЛЬШЕ", "motivation", "text", "Похвала / Виклик / Конкуренція", false],
+      ["ТЕМИ ЯКИХ НЕ ТРЕБА ТОРКАТИСЬ", "taboo", "area", "Необов'язково — якщо є...", false],
+    ],
+    // Step 4 — Ціль
+    [
+      ["ЧОГО ХОЧЕШ ДОСЯГТИ ЗА 21 ДЕНЬ — КОНКРЕТНО", "goal21", "area", "Щодня робити одну важливу дію без відкладань...", true],
+      ["ЯК ЗРОЗУМІЄШ ЩО ДОСЯГ — ЩО ЗМІНИТЬСЯ", "successSign", "area", "Перестану відкладати дзвінки і рішення...", false],
+      ["ЩО БУДЕ НАЙБІЛЬШОЮ ПЕРЕМОГОЮ", "bigWin", "area", "Завершити проект який відкладав рік...", false],
+      ["ЗАРАДИ ЧОГО ЦЕ ВАЖЛИВО — ГЛИБИННА ПРИЧИНА", "deepWhy", "area", "Хочу поважати себе, хочу щоб діти бачили сильного батька...", false],
+      ["ЛИСТ СОБІ НА 21-Й ДЕНЬ", "letter", "area", "Дорогий я... через 21 день я хочу бути людиною яка...", false],
+    ],
+  ];
+
+  const currentFields = FIELDS[step];
+  const requiredField = currentFields.find(f => f[4]);
+  const canNext = !requiredField || data[requiredField[1]].trim().length > 3;
+
+  const next = () => {
+    if (step < STEPS.length - 1) setStep(s => s + 1);
+    else {
+      onSetup({
+        name: data.name || "Воїн",
+        identity: data.identity,
+        avoid: data.avoid,
+        anchor: data.anchor,
+        letter: data.letter,
+        profile: data,
+      });
+    }
+  };
+
   return (
-    <div style={{ padding: "52px 24px 40px" }}>
-      <div style={{ textAlign: "center", marginBottom: 44 }}>
-        <div style={{ fontSize: 11, letterSpacing: 3, color: ACCENT, marginBottom: 14 }}>НОВА ВЕРСІЯ СЕБЕ</div>
-        <div style={{ fontSize: 30, fontWeight: 800, color: "#FFF", lineHeight: 1.2 }}>21 день<br/>трансформації</div>
-        <div style={{ fontSize: 14, color: "#888", marginTop: 12 }}>Визнач ідентичність — і починаємо</div>
-      </div>
-      {[["ЯК ТЕБЕ ЗВАТИ", name, setName, "Дмитро"],
-        ["МОЯ НОВА ВЕРСІЯ", identity, setIdentity, "Діяю чітко, будую системно, без сумнівів"],
-        ["ЩО НОВА ВЕРСІЯ НЕ РОБИТЬ", avoid, setAvoid, "Не відкладає, не пояснює старому собі"],
-      ].map(([l, v, s, p]) => (
-        <div key={l} style={{ marginBottom: 18 }}>
-          <Label>{l}</Label>
-          <input value={v} onChange={e => s(e.target.value)} placeholder={p} style={IS} />
+    <div style={{ minHeight:"100vh", background:DARK, padding:"0 0 40px" }}>
+      {/* Progress bar */}
+      <div style={{ position:"sticky", top:0, background:DARK, padding:"20px 24px 16px", zIndex:10, borderBottom:`1px solid ${BORDER}` }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+          <div style={{ fontSize:11, letterSpacing:2, color:ACCENT }}>КРОК {step+1} / {STEPS.length}</div>
+          <div style={{ fontSize:11, color:"#555" }}>{STEPS[step].subtitle}</div>
         </div>
-      ))}
-      <div style={{ marginBottom: 18 }}>
-        <Label>ЛИСТ СОБІ НА 21-Й ДЕНЬ</Label>
-        <div style={{ fontSize:12.5, color:"#888", marginBottom:9, lineHeight:1.6 }}>Напиши собі — яким ти хочеш вийти з цих 21 днів. Прочитаєш в кінці.</div>
-        <textarea value={letter} onChange={e => setLetter(e.target.value)}
-          placeholder="Дорогий я... через 21 день я хочу бути людиною яка..."
-          rows={4} style={{ ...IS, resize:"none", lineHeight:1.6, minHeight:100 }} />
+        <div style={{ height:3, background:"#161616", borderRadius:2 }}>
+          <div style={{ height:"100%", borderRadius:2, background:`linear-gradient(90deg,${ACCENT2},${ACCENT})`, width:`${((step+1)/STEPS.length)*100}%`, transition:"width .4s ease" }} />
+        </div>
+        <div style={{ fontSize:20, fontWeight:800, color:"#FFF", marginTop:12 }}>{STEPS[step].title}</div>
       </div>
-      <button onClick={() => ok && onSetup({ name: name || "Воїн", identity, avoid, letter })} style={{
-        marginTop: 32, width: "100%", padding: "17px 0",
-        background: ok ? ACCENT : "#161616", color: ok ? DARK : "#2E2E2E",
-        border: "none", borderRadius: 14, fontSize: 16, fontWeight: 700,
-        fontFamily: "inherit", cursor: ok ? "pointer" : "default", transition: "all 0.2s",
-      }}>Починаємо →</button>
+
+      <div style={{ padding:"24px 24px 100px" }}>
+        {currentFields.map(([label, key, type, placeholder, required]) => (
+          <div key={key} style={{ marginBottom:20 }}>
+            <div style={{ fontSize:10.5, color: required ? ACCENT : "#666", letterSpacing:1.5, marginBottom:8 }}>
+              {label}{required ? " *" : ""}
+            </div>
+            {type === "area" ? (
+              <textarea
+                value={data[key]}
+                onChange={e => set(key, e.target.value)}
+                placeholder={placeholder}
+                rows={3}
+                style={{ ...IS, resize:"none", lineHeight:1.6, minHeight:88 }}
+              />
+            ) : (
+              <input
+                value={data[key]}
+                onChange={e => set(key, e.target.value)}
+                placeholder={placeholder}
+                style={IS}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Bottom navigation */}
+      <div style={{ position:"fixed", bottom:0, left:0, right:0, padding:"12px 24px 28px", background:DARK, borderTop:`1px solid ${BORDER}` }}>
+        <div style={{ display:"flex", gap:10 }}>
+          {step > 0 && (
+            <button onClick={() => setStep(s => s-1)} style={{
+              flex:1, padding:"14px 0", background:"transparent",
+              border:`1px solid ${BORDER}`, color:"#555",
+              borderRadius:13, fontSize:15, fontFamily:"inherit", cursor:"pointer",
+            }}>← Назад</button>
+          )}
+          <button onClick={next} disabled={!canNext} style={{
+            flex:2, padding:"14px 0",
+            background: canNext ? ACCENT : "#161616",
+            color: canNext ? DARK : "#333",
+            border:"none", borderRadius:13, fontSize:15, fontWeight:700,
+            fontFamily:"inherit", cursor: canNext ? "pointer" : "default", transition:"all .2s",
+          }}>
+            {step < STEPS.length - 1 ? "Далі →" : "Починаємо →"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1125,7 +1254,7 @@ export default function App() {
   },[state]);
 
   const handleSetup = (s) => {
-    const ns = {...s,startDate:todayKey(),days:{}};
+    const ns = {...s, startDate:todayKey(), days:{}};
     saveData(ns); setState(ns);
   };
 
